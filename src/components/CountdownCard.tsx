@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import type { Countdown } from "@/types/countdown";
-import { PRESET_COLORS } from "@/types/countdown";
+import { PRESET_COLORS, PRESET_GROUPS, REPEAT_OPTIONS, ADVANCE_REMINDER_OPTIONS } from "@/types/countdown";
 import { useCountdownStore } from "@/store/useCountdownStore";
 import { calculateTimeLeft, formatNumber } from "@/utils/timeUtils";
-import { Pause, Play, Pencil, Trash2 } from "lucide-react";
+import { Pause, Play, Pencil, Trash2, RefreshCw, Bell } from "lucide-react";
 
 interface CountdownCardProps {
   countdown: Countdown;
@@ -34,6 +34,26 @@ export default function CountdownCard({ countdown, index, onEdit, onDelete }: Co
   const glowColor = getGlowColor(countdown.backgroundColor);
   const isComplete = timeLeft.isExpired && countdown.mode === "countdown";
 
+  const group = useMemo(() => {
+    return PRESET_GROUPS.find((g) => g.id === countdown.groupId);
+  }, [countdown.groupId]);
+
+  const repeatLabel = useMemo(() => {
+    if (countdown.repeatRule === "none") return null;
+    return REPEAT_OPTIONS.find((r) => r.value === countdown.repeatRule)?.label;
+  }, [countdown.repeatRule]);
+
+  const advanceRemindersLabel = useMemo(() => {
+    if (!countdown.advanceReminderMinutes?.length) return null;
+    return countdown.advanceReminderMinutes
+      .sort((a, b) => b - a)
+      .map((m) => {
+        const opt = ADVANCE_REMINDER_OPTIONS.find((o) => o.value === m);
+        return opt?.label || `${m}分钟`;
+      })
+      .join("、");
+  }, [countdown.advanceReminderMinutes]);
+
   const formatTargetDate = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleString("zh-CN", {
@@ -57,8 +77,8 @@ export default function CountdownCard({ countdown, index, onEdit, onDelete }: Co
     >
       <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none" />
 
-      <div className="relative z-10 flex flex-col h-full min-h-[280px]">
-        <div className="flex items-start justify-between mb-6">
+      <div className="relative z-10 flex flex-col h-full min-h-[340px]">
+        <div className="flex items-start justify-between mb-4">
           <div className="flex-1 min-w-0">
             <h3 className="text-lg font-semibold font-display text-white truncate drop-shadow-lg">
               {countdown.name}
@@ -80,9 +100,34 @@ export default function CountdownCard({ countdown, index, onEdit, onDelete }: Co
           </div>
         </div>
 
+        {(group || countdown.tags?.length) && (
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            {group && (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs backdrop-blur-sm"
+                style={{ backgroundColor: `${group.color}30`, color: "white" }}
+              >
+                <span>{group.icon}</span>
+                <span>{group.name}</span>
+              </span>
+            )}
+            {countdown.tags?.slice(0, 3).map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs text-white/80 bg-white/15 backdrop-blur-sm"
+              >
+                #{tag}
+              </span>
+            ))}
+            {countdown.tags?.length && countdown.tags.length > 3 && (
+              <span className="text-xs text-white/50">+{countdown.tags.length - 3}</span>
+            )}
+          </div>
+        )}
+
         <div key={tickKey} className="flex-1 flex flex-col justify-center">
           <div className="grid grid-cols-4 gap-2 text-center">
-            <TimeUnit label="天" value={timeLeft.days} animate />
+            <TimeUnit label="天" value={timeLeft.days} />
             <TimeUnit label="时" value={timeLeft.hours} />
             <TimeUnit label="分" value={timeLeft.minutes} />
             <TimeUnit label="秒" value={timeLeft.seconds} />
@@ -96,7 +141,29 @@ export default function CountdownCard({ countdown, index, onEdit, onDelete }: Co
           )}
         </div>
 
-        <div className="flex items-center gap-2 mt-6 pt-4 border-t border-white/15">
+        {(repeatLabel || advanceRemindersLabel) && (
+          <div className="flex flex-wrap gap-3 mt-4 mb-4 pt-3 border-t border-white/15">
+            {repeatLabel && (
+              <div className="flex items-center gap-1.5 text-xs text-white/70">
+                <RefreshCw size={12} />
+                <span>{repeatLabel}</span>
+                {countdown.repeatCount > 0 && (
+                  <span className="text-white/50">({countdown.repeatCount}次)</span>
+                )}
+              </div>
+            )}
+            {advanceRemindersLabel && (
+              <div className="flex items-center gap-1.5 text-xs text-white/70">
+                <Bell size={12} />
+                <span className="truncate max-w-[150px]" title={advanceRemindersLabel}>
+                  {advanceRemindersLabel}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
           <button
             onClick={() => togglePause(countdown.id)}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur-sm transition-all text-white text-sm font-medium"
@@ -127,7 +194,6 @@ export default function CountdownCard({ countdown, index, onEdit, onDelete }: Co
 interface TimeUnitProps {
   label: string;
   value: number;
-  animate?: boolean;
 }
 
 function TimeUnit({ label, value }: TimeUnitProps) {
